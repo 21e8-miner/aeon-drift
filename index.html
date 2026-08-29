@@ -3777,7 +3777,9 @@ const UPGRADES = [
   {id:'deflector', rr:2, ico:'🛡', nm:'Deflector Shield', ds:'Generates an electrostatic shield that blocks one collision. Regenerates when a zone is cleared.',
    ap(){ MOD.shieldMax=(MOD.shieldMax||0)+1; S.shieldActive=true; }},
   {id:'chronos', rr:3, ico:'⌛', nm:'Chronos Engine', ds:'Clearing a core chain or passing a gate triggers 1.5s of Chronos Drift (time slows by 50% for physics and steering).',
-   ap(){ MOD.chronos=1; }}
+   ap(){ MOD.chronos=1; }},
+  {id:'portal', rr:2, ico:'🌀', nm:'Portal Wake', ds:'Burning leaves behind a trail of energy rings. Flying through them grants +5 flux and bonus score.',
+   ap(){ MOD.portal=1; }}
 ];
 
 /* =============================================================== state === */
@@ -3791,7 +3793,7 @@ const S = {
   speed:96, targetSpeed:96, bank:0, pitch:0, roll:0,
   hull:100, flux:100, boosting:false, boostPrev:false,
   brake:0, dodgeT:0, dodgeCD:0, dodgeDir:0, spin:0, dyingT:0,
-  shieldActive:false, chronosT:0,
+  shieldActive:false, chronosT:0, portals:[], portalT:0, pendingDets:[],
   ppx:0, ppy:0, ppz:0, ix:0, iy:0, iz:0, alpha:0,
   score:0, mult:1, multT:0, rate:0,
   grazeHold:0, grazeTier:0, grazeCD:0, grazeTotal:0, bestGraze:0,
@@ -4178,7 +4180,7 @@ function resetRun(){
   S.ppx=S.px; S.ppy=S.py; S.ppz=S.pz; S.ix=S.px; S.iy=S.py; S.iz=S.pz; S.alpha=0;
   IN.kx=0; IN.ky=0; IN.dodgeBuf=-1; S.vx=0; S.vy=0;
   S.bestCombo=1; S.zone=0; S.zoneClean=true; S.cleanZones=0; S.deathT=0; S.draftT=0; S.whiteT=0;
-  S.shieldActive=MOD.shieldMax > 0; S.chronosT=0;
+  S.shieldActive=MOD.shieldMax > 0; S.chronosT=0; S.portals=[]; S.portalT=0; S.pendingDets=[];
   chunks.clear(); sparks.length=0; trailHist.length=0; rings.length=0;
   chainState.clear();
   camPos[0]=S.px; camPos[1]=S.py+4; camPos[2]=S.pz-18;
@@ -4430,6 +4432,75 @@ function updateGraze(dt){
 function simulate(dt){
   if (S.mode === 'play') {
     S.chronosT = Math.max(0, S.chronosT - dt);
+    
+    // Portal Wake generation
+    if(MOD.portal && S.boosting) {
+      S.portalT = (S.portalT || 0) - dt;
+      if(S.portalT <= 0) {
+        S.portalT = 0.25;
+        const pRing = { x: S.ix, y: S.iy, z: S.iz, r: 8.0, active: true, t: 3.5 };
+        S.portals.push(pRing);
+        ring(S.ix, S.iy, S.iz, 7.5, 8.0, 3.5, 0.9, 0.16, 0.82, 0); // glowing magenta ring
+      }
+    }
+    
+    // Portal Wake collision checking
+    if (S.portals) {
+      for (let i = S.portals.length - 1; i >= 0; i--) {
+        const p = S.portals[i];
+        p.t -= dt;
+        if (p.t <= 0) { S.portals.splice(i, 1); continue; }
+        const dz = p.z - S.pz;
+        if (Math.abs(dz) < S.speed * dt * 1.5 + 2.0 && p.active) {
+          const dist = Math.hypot(S.px - p.x, S.py - p.y);
+          if (dist < p.r + 2.0) {
+            p.active = false;
+            S.flux = Math.min(MOD.fluxMax, S.flux + 5);
+            S.score += 120 * S.mult * MOD.scoreMul;
+            pop('WAKE PASS', '#ff9ce0');
+            burst(p.x, p.y, p.z, 14, 12, 0.4, 0.9, 0.16, 0.82);
+            AU.core(2);
+          }
+        }
+      }
+    }
+    
+    // Nova Chain Reactions detonation logic
+    if (S.pendingDets && S.pendingDets.length > 0) {
+      for (let i = S.pendingDets.length - 1; i >= 0; i--) {
+        const det = S.pendingDets[i];
+        det.delay -= dt;
+        if (det.delay <= 0) {
+          S.pendingDets.splice(i, 1);
+          
+          const bi0 = Math.floor((det.z - det.r) / SEG_LEN);
+          const bi1 = Math.floor((det.z + det.r) / SEG_LEN);
+          let chainKills = 0;
+          for (let si = bi0; si <= bi1; si++) {
+            const c = chunkAt(si);
+            for (const m of c.mines) {
+              if (m.dead) continue;
+              const distSq = (m.x - det.x)**2 + (m.y - det.y)**2 + (m.z - det.z)**2;
+              if (distSq < det.r * det.r) {
+                m.dead = true;
+                chainKills++;
+                S.kills++;
+                S.score += 260 * S.mult * MOD.scoreMul;
+                burst(m.x, m.y, m.z, 28, 22, 0.45, 1.0, 0.48, 0.22);
+                ring(m.x, m.y, m.z, 1, 24, 0.35, 1.0, 0.48, 0.22, 0);
+                S.pendingDets.push({ x: m.x, y: m.y, z: m.z, r: 38.0, delay: 0.08 });
+              }
+            }
+          }
+          if (chainKills > 0) {
+            S.mult = Math.min(MOD.multCap, S.mult + 0.15 * chainKills);
+            S.multT = Math.max(S.multT, 2.5);
+            pop('CHAIN DET ' + chainKills + 'x', '#ff7d45');
+            AU.core(3);
+          }
+        }
+      }
+    }
   }
   if(S.mode==='dying'){
     // the ship is gone: debris coasts, the world slows, then the summary
@@ -4510,6 +4581,7 @@ function simulate(dt){
           S.score += 340*S.mult*MOD.scoreMul;
           burst(m.x,m.y,m.z, 40, 30, 0.55, 0.55,0.85,1.0);
           ring(m.x,m.y,m.z, 1, 22, 0.35, 0.60,0.90,1.0, 0);
+          S.pendingDets.push({ x: m.x, y: m.y, z: m.z, r: 38.0, delay: 0.08 });
         }
       }
     }
@@ -4636,6 +4708,20 @@ function simulate(dt){
       const dz=o.z-S.pz;
       if(dz>70||dz<-40) continue;
       const rr=9.0*MOD.pickR;
+      
+      // Homing Graze Harvester (magnetic pull)
+      const vacR = rr * (1.0 + S.grazeHold * 0.72);
+      const distSq = (o.x-S.px)**2 + (o.y-S.py)**2 + dz*dz;
+      const dist = Math.sqrt(distSq) || 1e-4;
+      if(dist < vacR && dist > rr && S.grazeHold > 0.05){
+        const pull = (1.0 - dist/vacR) * dt * 38.0;
+        o.x += (S.px - o.x) * pull;
+        o.y += (S.py - o.y) * pull;
+        o.z += (S.pz - o.z) * pull;
+        if(Math.random() < 0.22) {
+          emitSpark(o.x, o.y, o.z, (S.px-o.x)*0.25, (S.py-o.y)*0.25, -S.speed*0.1, 0.45, 0.22, 0.35, 1.0, 0.72);
+        }
+      }
       if((o.x-S.px)**2+(o.y-S.py)**2+dz*dz < rr*rr){
         o.got=true; S.cores++;
         S.score += 130*S.mult*MOD.scoreMul;
@@ -4751,6 +4837,7 @@ function simulate(dt){
         burst(m.x,m.y,m.z, 46, 34, 0.55, 1.0,0.40,0.20);
         ring(m.x,m.y,m.z, 1, 26, 0.4, 1.0,0.4,0.2, 0);
         S.whiteT=Math.max(S.whiteT,0.05);
+        S.pendingDets.push({ x: m.x, y: m.y, z: m.z, r: 38.0, delay: 0.08 });
       }
     }
 
