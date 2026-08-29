@@ -1134,7 +1134,13 @@ void main(){
   float cs = dot(rd, uSunDir);
   float disc = smoothstep(0.99975, 0.99992, cs);
   float halo = pow(max(cs,0.0), 900.0)*0.55 + pow(max(cs,0.0), 60.0)*0.06;
-  sky += uSunCol*(disc*95.0 + halo*14.0)*up;
+  // Add diffraction spikes to make the sun corona look highly advanced and cinematic
+  vec3 sunRight = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0) + 1e-4));
+  vec3 sunUp = cross(sunRight, uSunDir);
+  float spikeA = pow(max(dot(rd, normalize(uSunDir + sunRight * 0.07 * cos(uTime*0.1) + sunUp * 0.07 * sin(uTime*0.1))), 0.0), 9900.0);
+  float spikeB = pow(max(dot(rd, normalize(uSunDir - sunRight * 0.07 * sin(uTime*0.1) + sunUp * 0.07 * cos(uTime*0.1))), 0.0), 9900.0);
+  float spikes = (spikeA + spikeB) * 14.0 * uSunI;
+  sky += uSunCol*(disc*95.0 + halo*14.0 + spikes)*up;
 
   if(uNight > 0.004){
     // moonlight scattered by the same air column, plus the deep-sky layer
@@ -1523,6 +1529,32 @@ void main(){
     a *= clamp((sz - fz)/1.2, 0.0, 1.0);
   }
   fragColor = vec4(col*uPTint*a*4.4, 0.0);
+}`
+const SHIELD_VS = HEAD + `
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+uniform mat4 uM, uVP;
+uniform vec3 uCam;
+out vec3 vNrm; out vec3 vPos;
+void main(){
+  vec4 wp = uM * vec4(aPos, 1.0);
+  vPos = wp.xyz;
+  vNrm = normalize(wp.xyz - uM[3].xyz);
+  gl_Position = uVP * vec4(wp.xyz - uCam, 1.0);
+}`;
+const SHIELD_FS = HEAD + NOISE + `
+in vec3 vNrm; in vec3 vPos;
+uniform vec3 uCam;
+uniform float uTime;
+uniform vec3 uCol;
+out vec4 fragColor;
+void main(){
+  vec3 N = normalize(vNrm);
+  vec3 V = normalize(uCam - vPos);
+  float fres = pow(1.0 - max(dot(N,V), 0.0), 3.0);
+  float n = vnoise3(vPos * 0.4 + vec3(0.0, uTime * 2.0, 0.0)) * 0.35 + 0.65;
+  vec3 glow = uCol * fres * 4.0 * n;
+  fragColor = vec4(glow * (0.35 + 0.65 * fres), 0.0);
 }`;
 
 /* ------------------------------------------------------ contact shadow ----
@@ -1756,6 +1788,7 @@ in vec2 vUv;
 uniform sampler2D uHDR, uBloom, uGod, uAO, uNrm;
 uniform float uExposure, uSpeedBlur, uTime, uHit, uBloomStr, uGodStr, uShake;
 uniform float uOverdrive, uWhite, uDraft, uWarp, uStreak, uHeat, uDeath, uVigK;
+uniform float uChronos; // 0..1 representing active state of time dilation
 uniform vec3 uSunTint, uComboCol;
 uniform float uAOStr, uSunVis;
 uniform vec2 uSun;
@@ -1787,7 +1820,7 @@ void main(){
   vec2 ctr = uv - 0.5;
   float r = length(ctr);
   // real motion blur happens upstream now; here only chromatic aberration remains
-  float ca  = (0.0011 + uSpeedBlur*0.009 + uOverdrive*0.006)*r*r;
+  float ca  = (0.0011 + uSpeedBlur*0.009 + uOverdrive*0.006 + uChronos*0.015)*r*r;
   vec3 col;
   col.r = texture(uHDR, uv + ctr*ca).r;
   col.g = texture(uHDR, uv).g;
@@ -1849,6 +1882,11 @@ void main(){
   col = mix(col, mix(vec3(lum*0.72), col, 0.42)*vec3(0.86,0.94,1.10), uDraft);
   // death: heavy desaturation, crushed blacks
   col = mix(col, vec3(dot(col,vec3(0.3,0.59,0.11)))*vec3(0.92,0.86,0.86)*0.72, uDeath);
+
+  // time dilation desaturation and cyan-grade warp
+  float lumVal = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  vec3 chronosCol = mix(vec3(lumVal * 0.85), col * vec3(0.72, 0.94, 1.15), 0.5);
+  col = mix(col, chronosCol, uChronos);
 
   col = mix(col, vec3(1.0,0.16,0.20), uHit*0.5);
   col = mix(col, vec3(1.0), clamp(uWhite,0.0,1.0));
@@ -2051,7 +2089,8 @@ try{
     cas:   prog(FSVS, CAS_FS,  'cas'),
     mb:    prog(FSVS, MB_FS,   'mblur'),
     aoblur:prog(FSVS, AOBLUR_FS,'aoblur'),
-    fxaa:  prog(FSVS, FXAA_FS, 'fxaa')
+    fxaa:  prog(FSVS, FXAA_FS, 'fxaa'),
+    shield:prog(SHIELD_VS, SHIELD_FS, 'shield')
   };
 }catch(err){ fatal(err.message); return; }
 
@@ -3734,7 +3773,11 @@ const UPGRADES = [
   {id:'temp', rr:3, ico:'≫', nm:'Tempest Engine', ds:'Top speed +16%, and score scales harder with velocity.',
    ap(){ MOD.speedMul*=1.16; MOD.scoreMul*=1.12; }},
   {id:'oclock', rr:3, ico:'∞', nm:'Overclock', ds:'Overdrive runs 2.5s longer and keeps 75% of the combo when it ends.',
-   ap(){ MOD.odPlus+=2.5; MOD.odKeep=0.75; }}
+   ap(){ MOD.odPlus+=2.5; MOD.odKeep=0.75; }},
+  {id:'deflector', rr:2, ico:'🛡', nm:'Deflector Shield', ds:'Generates an electrostatic shield that blocks one collision. Regenerates when a zone is cleared.',
+   ap(){ MOD.shieldMax=(MOD.shieldMax||0)+1; S.shieldActive=true; }},
+  {id:'chronos', rr:3, ico:'⌛', nm:'Chronos Engine', ds:'Clearing a core chain or passing a gate triggers 1.5s of Chronos Drift (time slows by 50% for physics and steering).',
+   ap(){ MOD.chronos=1; }}
 ];
 
 /* =============================================================== state === */
@@ -3748,6 +3791,7 @@ const S = {
   speed:96, targetSpeed:96, bank:0, pitch:0, roll:0,
   hull:100, flux:100, boosting:false, boostPrev:false,
   brake:0, dodgeT:0, dodgeCD:0, dodgeDir:0, spin:0, dyingT:0,
+  shieldActive:false, chronosT:0,
   ppx:0, ppy:0, ppz:0, ix:0, iy:0, iz:0, alpha:0,
   score:0, mult:1, multT:0, rate:0,
   grazeHold:0, grazeTier:0, grazeCD:0, grazeTotal:0, bestGraze:0,
@@ -4134,6 +4178,7 @@ function resetRun(){
   S.ppx=S.px; S.ppy=S.py; S.ppz=S.pz; S.ix=S.px; S.iy=S.py; S.iz=S.pz; S.alpha=0;
   IN.kx=0; IN.ky=0; IN.dodgeBuf=-1; S.vx=0; S.vy=0;
   S.bestCombo=1; S.zone=0; S.zoneClean=true; S.cleanZones=0; S.deathT=0; S.draftT=0; S.whiteT=0;
+  S.shieldActive=MOD.shieldMax > 0; S.chronosT=0;
   chunks.clear(); sparks.length=0; trailHist.length=0; rings.length=0;
   chainState.clear();
   camPos[0]=S.px; camPos[1]=S.py+4; camPos[2]=S.pz-18;
@@ -4383,6 +4428,9 @@ function updateGraze(dt){
 }
 
 function simulate(dt){
+  if (S.mode === 'play') {
+    S.chronosT = Math.max(0, S.chronosT - dt);
+  }
   if(S.mode==='dying'){
     // the ship is gone: debris coasts, the world slows, then the summary
     S.dyingT-=dt;
@@ -4605,6 +4653,7 @@ function simulate(dt){
           S.mult=Math.min(MOD.multCap, S.mult + 0.6*MOD.chainMul); S.multT=Math.max(S.multT,5);
           S.flux=Math.min(MOD.fluxMax,S.flux+22);
           pop('PERFECT CHAIN ×'+o.cn, '#7ff0c0', true);
+          if(MOD.chronos) { S.chronosT = 1.5; pop('CHRONOS DRIFT', '#aef', true); }
           ring(o.x,o.y,o.z, 2, 34, 0.7, 0.35,1.0,0.72, 0);
           AU.chain(o.cn);
         }
@@ -4640,6 +4689,7 @@ function simulate(dt){
           S.flux=Math.min(MOD.fluxMax, S.flux+30);
           S.hull=Math.min(MOD.hullMax, S.hull+6);
           if(MOD.slip){ S.freeBoost=Math.max(S.freeBoost,1.3); pop('SLIPSTREAM','#9fffd0'); }
+          if(MOD.chronos) { S.chronosT = 1.5; pop('CHRONOS DRIFT', '#aef', true); }
           S.whiteT=Math.max(S.whiteT,0.06);
           ring(g.x,g.y,g.z, g.r*0.7, g.r*2.6, 0.55, 1.0,0.66,0.24, 0);
           if(rr>g.r*0.62){ pop('RIM RUN','#ffd48a',true); S.stopT=Math.max(S.stopT||0,0.10); }
@@ -4738,6 +4788,7 @@ function simulate(dt){
         S.whiteT=Math.max(S.whiteT,0.14);
         ring(a.x,a.y,a.z, a.r*0.8, a.r*2.4, 1.0, 0.6,0.95,1.0, 0);
         AU.zoneHit();
+        if(MOD.shieldMax) S.shieldActive=true;
         openDraft();
       }
     }
@@ -4788,6 +4839,16 @@ function enterDying(){
 }
 function damage(amount, x,y,z, hard, src){
   if(S.hitCD>0 || S.phase>0 || S.mode==='draft') return;
+  if(S.shieldActive){
+    S.shieldActive = false;
+    S.phase = 0.8;
+    S.hitCD = 0.8;
+    S.whiteT = Math.max(S.whiteT, 0.2); S.shake = 0.5;
+    pop('SHIELD ABSORB', '#8fe6ff', true);
+    ring(x,y,z, 2, 48, 0.6, 0.2, 0.8, 1.0, 0);
+    AU.zoneHit();
+    return;
+  }
   if(src) S.lastDmgSrc=src;
   const dmg=amount*MOD.dmgMul;
   if(S.hull-dmg <= 0 && MOD.secondWind>0){
@@ -4875,7 +4936,7 @@ function render(){
 
   // slow-mo while drafting; the world keeps drifting so it never feels frozen
   S.stopT=Math.max(0,(S.stopT||0)-dt);
-  let wantScale = S.mode==='draft' ? 0.11 : (S.mode==='dying' ? 0.26 : 1.0);
+  let wantScale = S.mode==='draft' ? 0.11 : (S.mode==='dying' ? 0.26 : (S.chronosT > 0 ? 0.50 : 1.0));
   if(S.stopT>0 && S.mode==='play') wantScale*=0.86;   // micro-hitstop on the big moments
   S.timeScale += (wantScale-S.timeScale)*Math.min(dt*7,1);
   if(S.mode==='draft') S.draftT=Math.min(1,S.draftT+dt*5);
@@ -5269,6 +5330,22 @@ function render(){
   function drawAdditive(){
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.CULL_FACE);
     const avp = TAA_ON ? vpU : vp;   // post-resolve draws must not carry the sub-pixel jitter
+    /* ---- shield bubble ---- */
+    if (S.shieldActive && CAM_MODE !== 2 && S.mode !== 'dying' && S.mode === 'play') {
+      gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE);
+      gl.depthMask(false);
+      gl.useProgram(P.shield);
+      const s = 2.4 + 0.08 * Math.sin(S.t * 8.0);
+      compose(shipMat, 0, S.ix, S.iy, S.iz, S.pitch, 0, S.bank + S.dodgeDir * S.spin * 6.2832, s, s, s);
+      gl.uniformMatrix4fv(P.shield.u('uM'), false, shipMat);
+      gl.uniformMatrix4fv(P.shield.u('uVP'), false, avp);
+      gl.uniform3fv(P.shield.u('uCam'), camPos);
+      gl.uniform1f(P.shield.u('uTime'), S.t);
+      gl.uniform3f(P.shield.u('uCol'), 0.2, 0.8, 1.0);
+      gl.bindVertexArray(M_orb.vao);
+      gl.drawElements(gl.TRIANGLES, M_orb.count, M_orb.type, 0);
+      gl.depthMask(true); gl.disable(gl.BLEND);
+    }
     /* ---- trail ---- */
   if(S.mode==='play'||S.mode==='draft'){
     trailHist.unshift({x:S.px,y:S.py,z:S.pz,b:S.bank});
@@ -5579,6 +5656,7 @@ function render(){
   tex(3, RT.ao.tex,       P.comp.u('uAO'));
   tex(4, RT.hdr.nrm,      P.comp.u('uNrm'));
   gl.uniform1f(P.comp.u('uAOStr'), AO_ON?0.85:0.0);
+  gl.uniform1f(P.comp.u('uChronos'), S.chronosT > 0 ? S.chronosT / 1.5 : 0.0);
   gl.uniform1f(P.comp.u('uExposure'), TOD.exp);
   gl.uniform1f(P.comp.u('uSpeedBlur'), (S.mode!=='menu'? 0.026+spdN*0.105 : 0.012) + (S.boosting?0.06:0));
   gl.uniform1f(P.comp.u('uTime'), S.t);
