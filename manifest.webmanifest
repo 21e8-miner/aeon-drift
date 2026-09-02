@@ -1,0 +1,19 @@
+{
+  "name": "AEON DRIFT — Volumetric Canyon Runner",
+  "short_name": "AEON DRIFT",
+  "description": "High-octane volumetric canyon runner built for webcade.fun arcade and high-performance WebGL2 browsers.",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#04050a",
+  "theme_color": "#04050a",
+  "categories": ["games", "arcade", "action"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

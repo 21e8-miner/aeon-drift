@@ -1,92 +1,92 @@
 # AEON DRIFT — Volumetric Canyon Runner
 
-AEON DRIFT is a high-performance, single-file WebGL2 canyon runner game featuring a volumetric rendering pipeline, custom procedural audio synthesizers, and multi-platform input support.
+AEON DRIFT is a high-performance, single-file WebGL2 canyon runner game featuring a volumetric rendering pipeline, procedural Web Audio synthesizers, roguelite upgrades, and full **[webcade.fun/arcade](https://webcade.fun/arcade)** cabinet integration.
 
-Live Demo: [https://21e8-miner.github.io/aeon-drift/](https://21e8-miner.github.io/aeon-drift/)
+Live Shareable URL: **[https://21e8-miner.github.io/aeon-drift/](https://21e8-miner.github.io/aeon-drift/)**
 
-## Features
+---
 
-- **WebGL2 HDR Renderer**: Volumetric clouds, GGX/Smith PBR shading, screen-space reflections, god rays, bloom, motion blur, SSAO, and TAA with Contrast-Adaptive Sharpening.
-- **Adaptive Resolution**: Automatically scales internal rendering scale to keep framerates locked on mobile and desktop.
-- **Procedural Sound**: Step sequencer soundtrack and sound effects synthesized entirely in the browser using the Web Audio API.
-- **Responsive Controls**: Fully supports Keyboard, Mouse, Touch (virtual joystick & swipe rolls), Tilt steering, and standard Gamepads.
-- **Arcade/Cabinet Wrapper Ready**:
-  - Out-of-the-box support for iframe communication via `postMessage`.
-  - Deterministic run seeds via query parameter (`?seed=...`) or `window.AEON_SEED`.
+## Key Features
+
+- **WebGL2 Volumetric Rendering**:
+  - Volumetric clouds with raymarched atmospheric scattering and dynamic storm lightning.
+  - GGX/Smith PBR shading with sedimentary canyon terrain, detail normals, wet rock sheen, and luminous mineral veins.
+  - Screen-Space Reflections (SSR) and dynamic river surface wave physics with ship water wake.
+  - Temporal Anti-Aliasing (TAA) with YCoCg variance clipping and Catmull-Rom history.
+  - Motion Blur with ship masking, multi-mip GGX Bloom, Anamorphic Flares, God Rays, SSAO, ACES Filmic Tonemapping, and Contrast-Adaptive Sharpening (CAS).
+
+- **Cockpit FPV & Visual Effects**:
+  - 3D Holographic Cockpit HUD (pitch ladder, artificial horizon line, velocity vector circle, lock-on diamond, target range readout).
+  - Dynamic Deflector Energy Shield hex mesh on impact/graze.
+  - Mach Cone vapor condensation shockwave cone when boosting.
+  - Exhaust plumes with mach diamonds and heat shimmer.
+
+- **Deep Roguelite Gameplay**:
+  - High-speed canyon flight physics with banking, pitch, roll, and ground effect hover cushion.
+  - Multi-target Homing Missile System with target acquisition.
+  - EMP Shock Pulse to purge minefields and hazards into flux.
+  - 24 Roguelite Upgrades (*Chronos Core*, *Plasma Lance*, *Tether Magnet*, *Resonance Shield*, *Second Wind*, *Nova Prow*, etc.).
+  - Overdrive Fever Mode at high combo multipliers.
+
+- **Synthesized Web Audio**:
+  - Procedural jet engine acoustic stack (Lighthill low-frequency roar, turbulent mixing, Mach-wave hiss, acoustic crackle spikes, fan whine).
+  - Multi-track step sequencer synthwave music that dynamically layers and ramps as combo intensity climbs.
+
+- **Webcade Arcade Cabinet Ready**:
+  - Native `postMessage` protocol for parent iframe integration (`aeon:start`, `aeon:stageClear`, `aeon:gameOver`, `webcade_score`).
+  - Deterministic run seeds via `?seed=...` or `?daily=1`.
+  - PWA support with Web App Manifest and offline capability.
+
+---
 
 ## Controls
 
 ### Keyboard & Mouse
 - **Mouse** or **W/A/S/D** / **Arrows**: Steer
 - **Shift** / **Space**: Burn (spend flux for speed)
-- **Q / E**: Snap roll left/right
+- **Q / E** (or Double Tap A/D): Snap roll left/right
 - **Ctrl** / **Z / X**: Air brake
-- **F**: Shock pulse (clears mines, costs 22 flux)
-- **C**: Cycle camera modes (Chase, Far Chase, Cockpit)
+- **F**: EMP Shock pulse (costs 22 flux)
+- **G**: Fire homing missile (locks forward targets)
+- **C**: Cycle camera modes (Chase, Far Chase, Cockpit FPV)
 - **I**: Invert Y axis
 - **T**: Toggle daily run mode
 - **M**: Mute/Unmute audio
-- **P**: Toggle performance metrics
+- **P**: Toggle performance stats
 - **R**: Restart run
 - **Esc**: Pause / Resume
 
-### Touch Devices
-- **Drag**: Steer (virtual relative-drag stick recenters dynamically)
-- **Tap Left/Right Thirds** (or flick sideways): Snap roll
+### Touch & Mobile
+- **Drag**: Virtual relative-drag joystick
+- **Swipe / Flick**: Snap roll
 - **▲ Burn Button**: Spend flux for speed
 - **▼ Button**: Air brake
 - **◎ Button**: Shock pulse
-- **II Button**: Pause / Resume
-- **⌖ Button**: Cycle camera
+- **➤ Button**: Fire homing missile
+- **II / ⌖**: Pause / Camera cycle
 
-### Gamepads
-- **Left Stick**: Steer
-- **Right Trigger**: Burn
-- **Left Trigger**: Air brake
-- **Left/Right Shoulders (L1/R1)**: Snap roll left/right
-- **X / A**: Pause / Resume
-- **Y**: Cycle camera
-- **B (Button 2)**: Shock pulse
+---
 
-## Host/Wrapper Integration API
+## Webcade Integration API
 
-You can embed AEON DRIFT in any arcade layout or iframe. The game exposes the following integration hooks:
+To embed AEON DRIFT inside webcade.fun or any arcade cabinet iframe:
 
-### Event Listeners (Parent Window)
-The game communicates lifecycle events using `window.parent.postMessage`. Listen to these events in your parent page:
 ```javascript
+// Listen to game events
 window.addEventListener("message", (e) => {
   if (e.data && e.data.aeon) {
-    const { aeon, seed, ...details } = e.data;
-    if (aeon === "start") {
-      console.log("Game started with seed:", seed);
-    } else if (aeon === "stageClear") {
-      console.log("Zone cleared:", details.stage, "Score:", details.score);
-    } else if (aeon === "gameOver") {
-      console.log("Run finished. Final Score:", details.score, "Zone:", details.stage, "Distance:", details.km);
-    }
+    console.log("Arcade Event:", e.data.aeon, e.data);
   }
 });
-```
 
-### Control Commands (Iframe Control)
-You can send postMessage controls into the iframe to control game state:
-```javascript
-// Pause the game
+// Control commands
 iframe.contentWindow.postMessage("pause", "*");
-
-// Resume the game
 iframe.contentWindow.postMessage("resume", "*");
-
-// Restart the game
 iframe.contentWindow.postMessage("restart", "*");
-
-// Mute / Unmute
-iframe.contentWindow.postMessage("mute", "*");
-iframe.contentWindow.postMessage("unmute", "*");
 ```
 
-### Deterministic Seed Injection
-To force a specific level layout for competitive tournaments or duels:
-- Define `window.AEON_SEED = "YOUR_HEX_OR_NUMBER"` in the iframe before load, or
-- Append `?seed=YOUR_HEX_OR_NUMBER` to the URL.
+---
+
+## License
+
+MIT License. Open-source and free for Webcade arcade embedding.

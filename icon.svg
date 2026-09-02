@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#0e1a30"/>
+      <stop offset="60%" stop-color="#060c18"/>
+      <stop offset="100%" stop-color="#020408"/>
+    </radialGradient>
+    <linearGradient id="sun" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#ffd28a"/>
+      <stop offset="100%" stop-color="#ff6b3d"/>
+    </linearGradient>
+    <linearGradient id="ship" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#9fe4ff"/>
+      <stop offset="100%" stop-color="#1f5fa8"/>
+    </linearGradient>
+    <linearGradient id="plume" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="30%" stop-color="#4ae0ff"/>
+      <stop offset="70%" stop-color="#2a75d9"/>
+      <stop offset="100%" stop-color="rgba(42,117,217,0)"/>
+    </linearGradient>
+    <linearGradient id="canyonL" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2b1f3d"/>
+      <stop offset="50%" stop-color="#181326"/>
+      <stop offset="100%" stop-color="#0a0812"/>
+    </linearGradient>
+    <linearGradient id="canyonR" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3d2218"/>
+      <stop offset="50%" stop-color="#24140d"/>
+      <stop offset="100%" stop-color="#0d0806"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bg)" rx="100"/>
+
+  <!-- Sun -->
+  <circle cx="256" cy="180" r="80" fill="url(#sun)" filter="url(#glow)" opacity="0.9"/>
+
+  <!-- Canyon Left -->
+  <path d="M0,512 L0,220 L70,240 L130,310 L190,420 L220,512 Z" fill="url(#canyonL)" opacity="0.95"/>
+  <path d="M0,260 L80,280 L140,360 L180,512 Z" fill="#4d3266" opacity="0.3"/>
+
+  <!-- Canyon Right -->
+  <path d="M512,512 L512,200 L440,230 L370,320 L310,430 L290,512 Z" fill="url(#canyonR)" opacity="0.95"/>
+  <path d="M512,240 L430,270 L360,370 L320,512 Z" fill="#663c26" opacity="0.3"/>
+
+  <!-- River -->
+  <path d="M220,512 L240,430 L256,360 L272,430 L290,512 Z" fill="#2fd0ff" opacity="0.6" filter="url(#glow)"/>
+
+  <!-- Ship Exhaust Plume -->
+  <path d="M246,310 L256,470 L266,310 Z" fill="url(#plume)" filter="url(#glow)"/>
+  <path d="M236,310 L256,430 L276,310 Z" fill="url(#plume)" opacity="0.7"/>
+
+  <!-- AEON Dart Ship -->
+  <g filter="url(#glow)">
+    <!-- Main Body -->
+    <path d="M256,120 L278,280 L256,310 L234,280 Z" fill="url(#ship)"/>
+    <!-- Left Wing -->
+    <path d="M256,220 L160,320 L180,330 L246,280 Z" fill="#79b9ff"/>
+    <path d="M160,320 L150,300 L170,325 Z" fill="#ffd28a"/>
+    <!-- Right Wing -->
+    <path d="M256,220 L352,320 L332,330 L266,280 Z" fill="#79b9ff"/>
+    <path d="M352,320 L362,300 L342,325 Z" fill="#ffd28a"/>
+    <!-- Canopy -->
+    <path d="M256,160 L264,220 L256,236 L248,220 Z" fill="#ffffff" opacity="0.9"/>
+  </g>
+
+  <!-- Speed Filaments -->
+  <line x1="200" y1="80" x2="200" y2="160" stroke="#79b9ff" stroke-width="2" opacity="0.4"/>
+  <line x1="312" y1="60" x2="312" y2="140" stroke="#79b9ff" stroke-width="2" opacity="0.4"/>
+  <line x1="140" y1="180" x2="140" y2="240" stroke="#ffd28a" stroke-width="1.5" opacity="0.3"/>
+  <line x1="372" y1="160" x2="372" y2="220" stroke="#ffd28a" stroke-width="1.5" opacity="0.3"/>
+</svg>
